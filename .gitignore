@@ -1,0 +1,19 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+VENV/
+
+# 
+data/*
+imgs/*
+logs/*
+result/*
+
+# Editor
+.vscode/*
+
+# Keep empty folder
+!.gitkeep
