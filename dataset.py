@@ -7,7 +7,7 @@ from PIL import Image
 
 
 class AlignedDataset(data.Dataset):
-    def __init__(self, data_dir, direction):
+    def __init__(self, data_dir, direction, img_size):
         super(AlignedDataset, self).__init__()
 
         self.AB_dir = '{}'.format(data_dir)
@@ -15,7 +15,7 @@ class AlignedDataset(data.Dataset):
         self.direction = direction
 
         self.transform = transforms.Compose([
-            transforms.Resize((128, 128)),
+            transforms.Resize((img_size, img_size)),
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
         ])

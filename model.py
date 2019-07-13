@@ -118,25 +118,41 @@ class ResBlock(nn.Module):
 # Discriminator
 # ----------------------------------------------------------------
 class Discriminator(nn.Module):
-    def __init__(self, input_nc, ndf):
+    def __init__(self, input_nc, ndf, n_blocks):
         super(Discriminator, self).__init__()
 
         # Discriminator with last patch (14x14)
-        self.d_1 = nn.Sequential(
-            nn.AvgPool2d(kernel_size=3, stride=2, padding=0, count_include_pad=False),
-            ConvBlock(input_nc, ndf // 2, k=4, s=2, p=1, norm_layer_type='none', non_linear_layer_type='leaky_relu'),
-            ConvBlock(ndf // 2, ndf, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu'),
-            ConvBlock(ndf, ndf * 2, k=4, s=1, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu'),
-            ConvBlock(ndf * 2, 1, k=4, s=1, p=1, norm_layer_type='none', non_linear_layer_type='none'),
-        )
+        d_1 = []
+        d_1.append(nn.AvgPool2d(kernel_size=3, stride=2, padding=0, count_include_pad=False))
+        d_1.append(ConvBlock(input_nc, ndf // 2, k=4, s=2, p=1, norm_layer_type='none', non_linear_layer_type='leaky_relu'))
+        d_1.append(ConvBlock(ndf // 2, ndf, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu'))
+
+        ndf_mult = 1
+        ndf_mult_prev = 1
+        for n in range(1, n_blocks):
+            ndf_mult_prev = ndf_mult
+            ndf_mult = min(2 ** n, 8)
+            d_1.append(ConvBlock(ndf * ndf_mult_prev, ndf * ndf_mult, k=4, s=1, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu'))
+
+        d_1.append(ConvBlock(ndf * ndf_mult, 1, k=4, s=1, p=1, norm_layer_type='none', non_linear_layer_type='none'))
+        self.d_1 = nn.Sequential(*d_1)
 
         # Discriminator with last patch (30x30)
-        self.d_2 = nn.Sequential(
-            ConvBlock(input_nc, ndf, k=4, s=2, p=1, norm_layer_type='none', non_linear_layer_type='leaky_relu'),
-            ConvBlock(ndf, ndf * 2, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu'),
-            ConvBlock(ndf * 2, ndf * 4, k=4, s=1, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu'),
-            ConvBlock(ndf * 4, 1, k=4, s=1, p=1, norm_layer_type='none', non_linear_layer_type='none'),
-        )
+        d_2 = []
+        d_2.append(ConvBlock(input_nc, ndf, k=4, s=2, p=1, norm_layer_type='none', non_linear_layer_type='leaky_relu'))
+
+        ndf_mult = 1
+        ndf_mult_prev = 1
+        for n in range(1, n_blocks):
+            ndf_mult_prev = ndf_mult
+            ndf_mult = min(2 ** n, 8)
+            d_2.append(ConvBlock(ndf * ndf_mult_prev, ndf * ndf_mult, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu'))
+
+        ndf_mult_prev = ndf_mult
+        ndf_mult = min(2 ** n_blocks, 8)
+        d_2.append(ConvBlock(ndf * ndf_mult_prev, ndf * ndf_mult, k=4, s=1, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu'))
+        d_2.append(ConvBlock(ndf * ndf_mult, 1, k=4, s=1, p=1, norm_layer_type='none', non_linear_layer_type='none'))
+        self.d_2 = nn.Sequential(*d_2)
 
     def forward(self, x):
         """
@@ -144,7 +160,7 @@ class Discriminator(nn.Module):
             x: (half_size, input_nc(args.input_nc + args.output_nc), h, w)
 
         Return
-            out_1: (half_size, 1, 15, 15)
+            out_1: (half_size, 1, 13, 13)
             out_2: (half_size, 1, 30, 30)
         """
 
@@ -154,6 +170,7 @@ class Discriminator(nn.Module):
         # (half_size, ndf, ndf // 4(14), ndf // 4(14)) ->
         # (half_size, 1, ndf // 4(13), ndf // 4(13))
         out_1 = self.d_1(x)
+        # print(out_1.size())
 
         # (half_size, ndf, ndf, ndf) ->
         # (half_size, ndf * 2, ndf // 2, ndf // 2) ->
@@ -169,25 +186,50 @@ class Discriminator(nn.Module):
 # Generator
 # ----------------------------------------------------------------
 class Generator(nn.Module):
-    def __init__(self, input_nc, output_nc, ngf=64, nz=8):
+    def __init__(self, input_nc, output_nc, ngf, nz, n_blocks):
         super(Generator, self).__init__()
 
-        self.downsample_1 = ConvBlock(input_nc + nz, ngf, k=4, s=2, p=1, norm_layer_type='none', non_linear_layer_type='leaky_relu')
-        self.downsample_2 = ConvBlock(ngf, ngf * 2, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu')
-        self.downsample_3 = ConvBlock(ngf * 2, ngf * 4, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu')
-        self.downsample_4 = ConvBlock(ngf * 4, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu')
-        self.downsample_5 = ConvBlock(ngf * 8, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu')
-        self.downsample_6 = ConvBlock(ngf * 8, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu')
-        self.downsample_7 = ConvBlock(ngf * 8, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu')
-        # self.downsample_8 = ConvBlock(ngf * 8, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu')
+        self.n_blocks = n_blocks
 
-        self.upsample_1 = DeconvBlock(ngf * 8, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu')
-        self.upsample_2 = DeconvBlock(ngf * 16, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu')
-        self.upsample_3 = DeconvBlock(ngf * 16, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu')
-        self.upsample_4 = DeconvBlock(ngf * 16, ngf * 4, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu')
-        self.upsample_5 = DeconvBlock(ngf * 8, ngf * 2, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu')
-        self.upsample_6 = DeconvBlock(ngf * 4, ngf, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu')
-        self.upsample_7 = DeconvBlock(ngf * 2, output_nc, k=4, s=2, p=1, norm_layer_type='none', non_linear_layer_type='tanh')
+        # self.downsample_1 = ConvBlock(input_nc + nz, ngf, k=4, s=2, p=1, norm_layer_type='none', non_linear_layer_type='leaky_relu')
+        # self.downsample_2 = ConvBlock(ngf, ngf * 2, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu')
+        # self.downsample_3 = ConvBlock(ngf * 2, ngf * 4, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu')
+        # self.downsample_4 = ConvBlock(ngf * 4, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu')
+        # self.downsample_5 = ConvBlock(ngf * 8, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu')
+        # self.downsample_6 = ConvBlock(ngf * 8, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu')
+        # self.downsample_7 = ConvBlock(ngf * 8, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu')
+
+        downsamples = []
+        downsamples.append(ConvBlock(input_nc + nz, ngf, k=4, s=2, p=1, norm_layer_type='none', non_linear_layer_type='leaky_relu'))
+        downsamples.append(ConvBlock(ngf, ngf * 2, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu'))
+        downsamples.append(ConvBlock(ngf * 2, ngf * 4, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu'))
+        downsamples.append(ConvBlock(ngf * 4, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu'))
+        for i in range(self.n_blocks - 5):
+            downsamples.append(ConvBlock(ngf * 8, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu'))
+        # downsamples.append(ConvBlock(ngf * 8, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu'))
+        # downsamples.append(ConvBlock(ngf * 8, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu'))
+        downsamples.append(ConvBlock(ngf * 8, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='leaky_relu'))
+        self.downsamples = nn.ModuleList(downsamples)
+
+        # self.upsample_1 = DeconvBlock(ngf * 8, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu')
+        # self.upsample_2 = DeconvBlock(ngf * 16, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu')
+        # self.upsample_3 = DeconvBlock(ngf * 16, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu')
+        # self.upsample_4 = DeconvBlock(ngf * 16, ngf * 4, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu')
+        # self.upsample_5 = DeconvBlock(ngf * 8, ngf * 2, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu')
+        # self.upsample_6 = DeconvBlock(ngf * 4, ngf, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu')
+        # self.upsample_7 = DeconvBlock(ngf * 2, output_nc, k=4, s=2, p=1, norm_layer_type='none', non_linear_layer_type='tanh')
+
+        upsamples = []
+        upsamples.append(DeconvBlock(ngf * 8, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu'))
+        for i in range(self.n_blocks - 5):
+            upsamples.append(DeconvBlock(ngf * 16, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu'))
+        # upsamples.append(DeconvBlock(ngf * 16, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu'))
+        # upsamples.append(DeconvBlock(ngf * 16, ngf * 8, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu'))
+        upsamples.append(DeconvBlock(ngf * 16, ngf * 4, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu'))
+        upsamples.append(DeconvBlock(ngf * 8, ngf * 2, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu'))
+        upsamples.append(DeconvBlock(ngf * 4, ngf, k=4, s=2, p=1, norm_layer_type='instance', non_linear_layer_type='relu'))
+        upsamples.append(DeconvBlock(ngf * 2, output_nc, k=4, s=2, p=1, norm_layer_type='none', non_linear_layer_type='tanh'))
+        self.upsamples = nn.ModuleList(upsamples)
 
     def forward(self, x, z):
         """
@@ -203,49 +245,65 @@ class Generator(nn.Module):
         z = z.expand(z.size(0), z.size(1), x.size(2), x.size(3))  # (half_size, nz, h, w)
         x_z = torch.cat([x, z], dim=1)  # (half_size, input_nc + nz, h, w)
 
-        down_1 = self.downsample_1(x_z)  # (half_size, ngf, ngf, ngf)
-        down_2 = self.downsample_2(down_1)  # (half_size, ngf * 2, ngf // 2, ngf // 2)
-        down_3 = self.downsample_3(down_2)  # (half_size, ngf * 4, ngf // 4, ngf // 4)
-        down_4 = self.downsample_4(down_3)  # (half_size, ngf * 8, ngf // 8, ngf // 8)
-        down_5 = self.downsample_5(down_4)  # (half_size, ngf * 8, ngf // 16, ngf // 16)
-        down_6 = self.downsample_6(down_5)  # (half_size, ngf * 8, ngf // 32, ngf // 32)
-        down_7 = self.downsample_7(down_6)  # (half_size, ngf * 8, ngf // 64, ngf // 64)
+        # down_1 = self.downsample_1(x_z)  # (half_size, ngf, ngf, ngf)
+        # down_2 = self.downsample_2(down_1)  # (half_size, ngf * 2, ngf // 2, ngf // 2)
+        # down_3 = self.downsample_3(down_2)  # (half_size, ngf * 4, ngf // 4, ngf // 4)
+        # down_4 = self.downsample_4(down_3)  # (half_size, ngf * 8, ngf // 8, ngf // 8)
+        # down_5 = self.downsample_5(down_4)  # (half_size, ngf * 8, ngf // 16, ngf // 16)
+        # down_6 = self.downsample_6(down_5)  # (half_size, ngf * 8, ngf // 32, ngf // 32)
+        # down_7 = self.downsample_7(down_6)  # (half_size, ngf * 8, ngf // 64, ngf // 64)
 
-        up_1 = self.upsample_1(down_7)  # (half_size, ngf * 8, ngf // 32, ngf // 32)
-        up_2 = self.upsample_2(torch.cat([up_1, down_6], dim=1))  # (half_size, ngf * 8, ngf // 16, ngf // 16)
-        up_3 = self.upsample_3(torch.cat([up_2, down_5], dim=1))  # (half_size, ngf * 8, ngf // 8, ngf // 8)
-        up_4 = self.upsample_4(torch.cat([up_3, down_4], dim=1))  # (half_size, ngf * 4, ngf // 4, ngf // 4)
-        up_5 = self.upsample_5(torch.cat([up_4, down_3], dim=1))  # (half_size, ngf * 2, ngf // 2, ngf // 2)
-        up_6 = self.upsample_6(torch.cat([up_5, down_2], dim=1))  # (half_size, ngf * 1, ngf, ngf)
-        up_7 = self.upsample_7(torch.cat([up_6, down_1], dim=1))  # (half_size, output_nc, ngf * 2, ngf * 2)
+        # up_1 = self.upsample_1(down_7)  # (half_size, ngf * 8, ngf // 32, ngf // 32)
+        # up_2 = self.upsample_2(torch.cat([up_1, down_6], dim=1))  # (half_size, ngf * 8, ngf // 16, ngf // 16)
+        # up_3 = self.upsample_3(torch.cat([up_2, down_5], dim=1))  # (half_size, ngf * 8, ngf // 8, ngf // 8)
+        # up_4 = self.upsample_4(torch.cat([up_3, down_4], dim=1))  # (half_size, ngf * 4, ngf // 4, ngf // 4)
+        # up_5 = self.upsample_5(torch.cat([up_4, down_3], dim=1))  # (half_size, ngf * 2, ngf // 2, ngf // 2)
+        # up_6 = self.upsample_6(torch.cat([up_5, down_2], dim=1))  # (half_size, ngf * 1, ngf, ngf)
+        # up_7 = self.upsample_7(torch.cat([up_6, down_1], dim=1))  # (half_size, output_nc, ngf * 2, ngf * 2)
 
-        return up_7
+        # return up_7
+
+        downs = []
+        downs.append(self.downsamples[0](x_z))
+        for i in range(self.n_blocks - 1):
+            input = downs[i]
+            downs.append(self.downsamples[i + 1](input))
+
+        ups = []
+        ups.append(self.upsamples[0](downs[-1]))
+        for i in range(self.n_blocks - 1):
+            input = torch.cat([ups[i], downs[self.n_blocks - i - 2]], dim=1)
+            ups.append(self.upsamples[i + 1](input))
+
+        return ups[-1]
 
 
 # ----------------------------------------------------------------
 # Encoder
 # ----------------------------------------------------------------
 class Encoder(nn.Module):
-    def __init__(self, input_nc, nef, nz, non_linear_layer_type='leaky_relu'):
+    def __init__(self, input_nc, output_nc, nef, n_blocks, non_linear_layer_type='leaky_relu'):
         super(Encoder, self).__init__()
 
         non_linear_layer = get_non_linear_layer(non_linear_layer_type)
 
         self.conv = nn.Conv2d(input_nc, nef, kernel_size=4, stride=2, padding=1)
 
-        self.res_block = nn.Sequential(
-            ResBlock(nef, nef * 2),
-            ResBlock(nef * 2, nef * 3),
-            ResBlock(nef * 3, nef * 4)
-        )
+        max_nef = 4
+        res_block = []
+        for n in range(1, n_blocks):
+            input_nef = nef * min(max_nef, n)
+            output_nef = nef * min(max_nef, n + 1)
+            res_block += [ResBlock(input_nef, output_nef)]
+        self.res_block = nn.Sequential(*res_block)
 
         self.pool_block = nn.Sequential(
             non_linear_layer(),
             nn.AvgPool2d(kernel_size=8, stride=8, padding=0)
         )
 
-        self.fc_mu = nn.Linear(nef * 4, nz)
-        self.fc_logvar = nn.Linear(nef * 4, nz)
+        self.fc_mu = nn.Linear(nef * 4, output_nc)
+        self.fc_logvar = nn.Linear(nef * 4, output_nc)
 
     def forward(self, x):
         """
@@ -258,6 +316,7 @@ class Encoder(nn.Module):
         """
 
         out = self.conv(x)  # (half_size, ndf, nef, nef)
+
         # (half_size, nef * 2, nef // 2, nef // 2) ->
         # (half_size, nef * 3, nef // 4, nef // 4) ->
         # (half_size, nef * 4, nef // 8, nef // 8)

@@ -49,18 +49,28 @@ class Trainer(object):
         self.lambda_img = args.lambda_img
         self.lambda_z = args.lambda_z
 
+        if args.img_size == 128:
+            d_n_blocks = 2
+            g_n_blocks = 7
+            e_n_blocks = 4
+        elif args.img_size == 256:
+            d_n_blocks = 3
+            g_n_blocks = 8
+            e_n_blocks = 5
+
         # Discriminator for cVAE-GAN(encoded vector z)
-        self.D_cVAE = Discriminator(args.input_nc + args.output_nc, args.ndf).to(self.device)
+        self.D_cVAE = Discriminator(args.input_nc + args.output_nc, args.ndf, n_blocks=d_n_blocks).to(self.device)
         self.D_cVAE.apply(weights_init)
         # print(self.D_cVAE)
         # Discriminator for cLR-GAN(random vector z)
-        self.D_cLR = Discriminator(args.input_nc + args.output_nc, args.ndf).to(self.device)
+        self.D_cLR = Discriminator(args.input_nc + args.output_nc, args.ndf, n_blocks=d_n_blocks).to(self.device)
         self.D_cLR.apply(weights_init)
 
-        self.G = Generator(args.input_nc, args.output_nc, args.ngf, args.nz).to(self.device)
+        self.G = Generator(args.input_nc, args.output_nc, args.ngf, args.nz, n_blocks=g_n_blocks).to(self.device)
         self.G.apply(weights_init)
+        # print(self.G)
 
-        self.E = Encoder(args.input_nc, args.nef, args.nz).to(self.device)
+        self.E = Encoder(args.input_nc, args.nz, args.nef, n_blocks=e_n_blocks).to(self.device)
         self.E.apply(weights_init)
         # print(self.E)
 

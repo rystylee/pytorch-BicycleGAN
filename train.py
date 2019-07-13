@@ -10,7 +10,7 @@ from trainer import Trainer
 
 def train(args):
     print('Loading dataset...')
-    dataset = AlignedDataset('{}/{}'.format(args.data_root, args.dataset_name), args.direction)
+    dataset = AlignedDataset('{}/{}'.format(args.data_root, args.dataset_name), args.direction, args.img_size)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
     print('The number of training images: {}'.format(len(dataset)))
 
@@ -35,6 +35,7 @@ def main():
     parser.add_argument('--data_root', type=str, default='data', help='')
     parser.add_argument('--dataset_name', type=str, default='portrait', help='')
     parser.add_argument('--direction', type=str, default='AtoB', help='')
+    parser.add_argument('--img_size', type=int, default=128, help='')
     parser.add_argument('--batch_size', type=int, default=2, help='')
 
     # Model
