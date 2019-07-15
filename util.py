@@ -3,6 +3,24 @@ import torchvision.transforms as transforms
 import numpy as np
 
 
+def get_input_tensor(pil_img):
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+    return transform(pil_img)
+
+
+def toPIL(tensor):
+    transform = transforms.ToPILImage()
+    return transform(tensor)
+
+
+def normalize(tensor):
+    transform = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    return transform(tensor)
+
+
 def denormalize(tensor):
     mean = np.asarray([0.5, 0.5, 0.5])
     std = np.asarray([0.5, 0.5, 0.5])

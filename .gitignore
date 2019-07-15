@@ -8,7 +8,6 @@ VENV/
 
 # 
 data/*
-imgs/*
 logs/*
 result/*
 
