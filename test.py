@@ -61,7 +61,7 @@ def test_recursive(args):
             cv2.imshow('Result', out_denormalized)
 
             input_tensor = out
-            # z_sample = get_z_random(1, args.nz).to(device)
+            z_random = sample_z(1, args.nz, 'gauss').to(device)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
