@@ -13,7 +13,7 @@ a Pytorch implementation of [BicycleGAN](https://arxiv.org/abs/1711.11586)
 
 ## ToDo
 
-- [ ] add support for 256 resolution
+- [x] add support for 256x256 resolution 
 
 
 ## Licence
